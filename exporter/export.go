@@ -66,6 +66,10 @@ func New(o Options) (*Exporter, error) {
 		o := pushOptions{"udp", *statsdHostPort, metricToStatsd, statsdExportTotal, statsdExportSuccess}
 		e.RegisterPushExport(o)
 	}
+	if *dogstatsdHostPort != "" {
+		o := pushOptions{"udp", *dogstatsdHostPort, metricToDogstatsd, dogstatsdExportTotal, dogstatsdExportSuccess}
+		e.RegisterPushExport(o)
+	}
 
 	return e, nil
 }

@@ -6,6 +6,7 @@ package exporter
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,6 +138,67 @@ func TestMetricToStatsd(t *testing.T) {
 	d.Set(37, ts)
 	r = FakeSocketWrite(metricToStatsd, timingMetric)
 	expected = []string{"prog.foo:37|ms"}
+	if !reflect.DeepEqual(expected, r) {
+		t.Errorf("String didn't match:\n\texpected: %v\n\treceived: %v", expected, r)
+	}
+}
+
+func TestMetricToDogstatsd(t *testing.T) {
+	ts, terr := time.Parse("2006/01/02 15:04:05", "2012/07/24 10:14:00")
+	if terr != nil {
+		t.Errorf("time parse error: %s", terr)
+	}
+
+	scalarMetric := metrics.NewMetric("foo", "prog", metrics.Counter)
+	d, _ := scalarMetric.GetDatum()
+	d.Set(37, ts)
+	r := FakeSocketWrite(metricToDogstatsd, scalarMetric)
+	expected := []string{"foo:37|c|#program:prog"}
+	if !reflect.DeepEqual(expected, r) {
+		t.Errorf("String didn't match:\n\texpected: %v\n\treceived: %v", expected, r)
+	}
+
+	dimensionedMetric := metrics.NewMetric("bar", "prog", metrics.Gauge, "l", "x")
+	d, _ = dimensionedMetric.GetDatum("quux", "ham")
+	d.Set(37, ts)
+	d, _ = dimensionedMetric.GetDatum("snuh", "spam")
+	d.Set(42, ts)
+	r = FakeSocketWrite(metricToDogstatsd, dimensionedMetric)
+
+	// Parse the metrics to pull out tags for comparison
+	result_metrics := []string{}
+	result_tags := []map[string]string{}
+	for _, result := range r {
+		split := strings.Split(result, "#")
+		result_metrics = append(result_metrics, split[0])
+		raw_tags := split[1]
+		tags := map[string]string{}
+		for _, tagval := range strings.Split(raw_tags, ",") {
+			parts := strings.Split(tagval, ":")
+			tags[parts[0]] = parts[1]
+		}
+		result_tags = append(result_tags, tags)
+	}
+
+	expected_metrics := []string{
+		"bar:37|g|",
+		"bar:42|g|"}
+	if !reflect.DeepEqual(expected_metrics, result_metrics) {
+		t.Errorf("Metric prefixes didn't match:\n\texpected: %v\n\treceived: %v", expected_metrics, result_metrics)
+	}
+	expected_tags := []map[string]string{
+		{"l": "quux", "program": "prog", "x": "ham"},
+		{"l": "snuh", "program": "prog", "x": "spam"},
+	}
+	if !reflect.DeepEqual(expected_tags, result_tags) {
+		t.Errorf("Tags didn't match:\n\texpected: %v\n\treceived: %v", expected_tags, result_tags)
+	}
+
+	timingMetric := metrics.NewMetric("foo", "prog", metrics.Timer)
+	d, _ = timingMetric.GetDatum()
+	d.Set(37, ts)
+	r = FakeSocketWrite(metricToDogstatsd, timingMetric)
+	expected = []string{"foo:37|ms|#program:prog"}
 	if !reflect.DeepEqual(expected, r) {
 		t.Errorf("String didn't match:\n\texpected: %v\n\treceived: %v", expected, r)
 	}
