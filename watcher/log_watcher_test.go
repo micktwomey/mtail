@@ -8,6 +8,7 @@ import (
 	"expvar"
 	"io/ioutil"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -122,6 +123,13 @@ func TestNewLogWatcherError(t *testing.T) {
 func TestLogWatcherAddError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping log watcher test in short mode")
+	}
+
+	current_user, err := user.Current()
+	if err == nil {
+		if current_user.Username == "root" {
+			t.Skip("skipping log watcher add error test when run as root")
+		}
 	}
 
 	workdir, err := ioutil.TempDir("", "log_watcher_test")
